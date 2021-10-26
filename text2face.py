@@ -12,12 +12,15 @@ from tqdm import tqdm
 from typing import List
 
 from CLIP.clip import clip
+from CLIPLoss import CLIPLoss
 
 import StyleGAN2.dnnlib as dnnlib
 from StyleGAN2 import legacy
 
-# openCV形式の画像に変換する
 def tensor2cvImage(image):
+    '''
+      OpenCV形式の画像に変換する
+    '''
     image = (image.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255).to(torch.uint8)
     image = image[0].cpu().numpy()
     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
@@ -26,10 +29,15 @@ def tensor2cvImage(image):
 
 
 def arg_parse():
+    '''
+      各種パラメータの読み込み
+    '''
     list_type = lambda x:list(map(int, x.split(' ')))
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--itr', default=151, type=int)
+    parser.add_argument('--pretrained_model', default="ffhq", type=str)
+
     parser.add_argument('--image_path', default=None, type=str)
     parser.add_argument('--seeds', default=None, type=list_type)
     parser.add_argument('--text', default="blue eyes", type=str)
@@ -45,40 +53,55 @@ def arg_parse():
     return args
 
 
-# 入力テキスト
-text = "She is a charming woman with blonde hair and blue eyes"
+def styleGAN2_model_zoo(args):
+    '''
+      StyleGAN2の事前学習モデルのURLを取得する
+    '''
+    dataset = args.pretrained_model
+
+    if dataset == "ffhq":
+        url = "https://nvlabs-fi-cdn.nvidia.com/stylegan2-ada-pytorch/pretrained/ffhq.pkl"
+
+    elif dataset == "metface":
+        url = "https://nvlabs-fi-cdn.nvidia.com/stylegan2-ada-pytorch/pretrained/metfaces.pkl"
+
+    elif dataset == "cifar10":
+        url = "https://nvlabs-fi-cdn.nvidia.com/stylegan2-ada-pytorch/pretrained/cifar10.pkl"
+
+    else:
+        url = args.pretrained_model
+
+    return url
+
+
 
 if __name__ == "__main__":
     args = arg_parse()
-
-
-    # デバイス
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # CLIPの読み込み
     model_clip, preprocess_clip = clip.load('ViT-B/32', jit=True)  
     model_clip = model_clip.eval()
 
-    # ロスを定義
-    def compute_clip_loss(img, text):
-        img = torch.nn.functional.upsample_bilinear(img, (224, 224))
-        tokenized_text = clip.tokenize([text]).to(device)
-        img_logits, _text_logits = model_clip(img, tokenized_text)
-        return 1.0 / img_logits * 100.0
+    clip_loss = CLIPLoss(model_clip)
 
+    # # ロスを定義
+    # def compute_clip_loss(img, text):
+    #     img = torch.nn.functional.upsample_bilinear(img, (224, 224))
+    #     tokenized_text = clip.tokenize([text]).to(device)
+    #     img_logits, _text_logits = model_clip(img, tokenized_text)
+    #     return 1.0 / img_logits * 100.0
 
     # StyleGAN2-ADAの読み込み
-    network_pkl = "https://nvlabs-fi-cdn.nvidia.com/stylegan2-ada-pytorch/pretrained/ffhq.pkl"
+    network_pkl = styleGAN2_model_zoo(args)
     print('Loading networks from "%s"...' % network_pkl)
     with dnnlib.util.open_url(network_pkl) as f:
         generator = legacy.load_network_pkl(f)['G_ema'].to(device)
-
 
     # 潜在変数を宣言
     latent_shape = (1, 1, 512)
     latents_init = torch.zeros(latent_shape).squeeze(-1).to(device)
     latents = torch.nn.Parameter(latents_init, requires_grad=True)
-
 
     # 学習パラメータ
     lr = 1e-2 
@@ -100,7 +123,7 @@ if __name__ == "__main__":
         for i in range(max_iter):
             dlatents = latents.repeat(1,18,1)
             image = generator.synthesis(dlatents, noise_mode=noise_mode)
-            loss = compute_clip_loss(image, text) 
+            loss = clip_loss(image, args.text) 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
