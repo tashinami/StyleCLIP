@@ -17,6 +17,8 @@ from CLIPLoss import CLIPLoss
 import StyleGAN2.dnnlib as dnnlib
 from StyleGAN2 import legacy
 
+from mapper.StyleCLIPMapper import StyleCLIPMapper
+
 def tensor2cvImage(image):
     '''
       OpenCV形式の画像に変換する
@@ -103,11 +105,16 @@ if __name__ == "__main__":
     latents_init = torch.zeros(latent_shape).squeeze(-1).to(device)
     latents = torch.nn.Parameter(latents_init, requires_grad=True)
 
+    # 潜在変数のマッパー
+    mapper = StyleCLIPMapper()
+
     # 学習パラメータ
     lr = 1e-2 
     max_iter = args.itr
-    optimizer = torch.optim.SGD(params=[latents], lr=lr, momentum=0.9, nesterov=True)
+    # optimizer = torch.optim.SGD(params=[latents], lr=lr, momentum=0.9, nesterov=True)
+    optimizer = torch.optim.Adam(params=mapper.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
+
 
     # 出力ディレクトリを作成
     out_dir = args.out_dir
@@ -121,7 +128,8 @@ if __name__ == "__main__":
     noise_mode = 'const'
     with tqdm(total=max_iter, unit="itr") as pbar:
         for i in range(max_iter):
-            dlatents = latents.repeat(1,18,1)
+            delta = mapper(latents)
+            dlatents = delta.repeat(1,18,1)
             image = generator.synthesis(dlatents, noise_mode=noise_mode)
             loss = clip_loss(image, args.text) 
             optimizer.zero_grad()
