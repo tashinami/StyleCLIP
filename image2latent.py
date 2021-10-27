@@ -5,27 +5,16 @@ import warnings
 warnings.simplefilter('ignore')
 
 import cv2
+import argparse
+import numpy as np
+from tqdm import tqdm
+
 import torch
 import torch.nn.functional as F
 
 import StyleGAN2.dnnlib as dnnlib
 from StyleGAN2 import legacy
 
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
-
-import warnings
-warnings.simplefilter('ignore')
-
-import os
-import cv2
-import torch
-import numpy as np
-import argparse
-from tqdm import tqdm
-from typing import List
-import StyleGAN2.dnnlib as dnnlib
-from StyleGAN2 import legacy
 
 seed = 300
 np.random.seed(seed)
