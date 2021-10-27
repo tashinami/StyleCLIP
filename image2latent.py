@@ -46,8 +46,6 @@ target_image = cv2.resize(target_image, (generator.img_resolution, generator.img
 target = torch.tensor(target_image.transpose([2, 0, 1]), device=device)
 
 
-generator = copy.deepcopy(generator).eval().requires_grad_(False).to(device) # type: ignore
-
 num_steps = 1000
 w_avg_samples = 10000
 initial_learning_rate = 0.1
