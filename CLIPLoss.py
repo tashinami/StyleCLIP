@@ -1,6 +1,4 @@
 import torch
-from CLIP.clip import clip
-
 
 class CLIPLoss(torch.nn.Module):
 
