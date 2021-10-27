@@ -19,8 +19,6 @@ from StyleGAN2 import legacy
 seed = 300
 np.random.seed(seed)
 torch.manual_seed(seed)
-
-
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # StyleGAN2-ADAの読み込み
