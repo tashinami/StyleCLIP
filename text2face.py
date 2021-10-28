@@ -125,7 +125,6 @@ if __name__ == "__main__":
     # 学習パラメータ
     lr = 1e-2 
     max_iter = args.itr
-    # optimizer = torch.optim.SGD(params=[latents], lr=lr, momentum=0.9, nesterov=True)
     optimizer = torch.optim.Adam(params=mapper.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=30, verbose=True)
 
@@ -143,7 +142,7 @@ if __name__ == "__main__":
     with tqdm(total=max_iter, unit="itr") as pbar:
         for i in range(max_iter):
             w = latents
-            w_hat = w + mapper(w)
+            w_hat = w + 0.1 * mapper(w)
             dlatents = w_hat.repeat(1,18,1)
             image = generator.synthesis(dlatents, noise_mode=noise_mode)
             loss = clip_loss(image, args.text, w, w_hat) 
