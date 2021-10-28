@@ -20,5 +20,5 @@ class CLIPLoss(torch.nn.Module):
 
         loss_l2_latent = self.latent_l2_loss(w_hat, w)
 
-        loss = similarity + loss_l2_latent
+        loss = similarity + loss_l2_latent * 0.8
         return loss
