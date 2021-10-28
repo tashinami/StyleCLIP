@@ -85,14 +85,8 @@ if __name__ == "__main__":
     model_clip, preprocess_clip = clip.load('ViT-B/32', jit=True)  
     model_clip = model_clip.eval()
 
+    # ロス
     clip_loss = CLIPLoss(model_clip)
-
-    # # ロスを定義
-    # def compute_clip_loss(img, text):
-    #     img = torch.nn.functional.upsample_bilinear(img, (224, 224))
-    #     tokenized_text = clip.tokenize([text]).to(device)
-    #     img_logits, _text_logits = model_clip(img, tokenized_text)
-    #     return 1.0 / img_logits * 100.0
 
     # StyleGAN2-ADAの読み込み
     network_pkl = styleGAN2_model_zoo(args)
@@ -113,7 +107,7 @@ if __name__ == "__main__":
     max_iter = args.itr
     # optimizer = torch.optim.SGD(params=[latents], lr=lr, momentum=0.9, nesterov=True)
     optimizer = torch.optim.Adam(params=mapper.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=30, verbose=True)
 
 
     # 出力ディレクトリを作成
@@ -128,10 +122,11 @@ if __name__ == "__main__":
     noise_mode = 'const'
     with tqdm(total=max_iter, unit="itr") as pbar:
         for i in range(max_iter):
-            delta = mapper(latents)
-            dlatents = delta.repeat(1,18,1)
+            w = latents
+            w_hat = w + mapper(w)
+            dlatents = w_hat.repeat(1,18,1)
             image = generator.synthesis(dlatents, noise_mode=noise_mode)
-            loss = clip_loss(image, args.text) 
+            loss = clip_loss(image, args.text, w, w_hat) 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

@@ -1,16 +1,18 @@
 import torch
 from torch import nn
-from mapper.latent_mapper import SingleMapper
+from mapper.latent_mapper import SingleMapper, LevelsMapper
 
 class StyleCLIPMapper(nn.Module):
     def __init__(self):
         super(StyleCLIPMapper, self).__init__()
-        # Define architecture
-        self.mapper = SingleMapper()
+
+        self.mapper = LevelsMapper()
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.mapper = self.mapper.to(device)
 
     def load_weights(self, checkpoint_path):
         if checkpoint_path is not None:
-            print('Loading from  mapper checkpoint: {}'.format(self.opts.checkpoint_path))
+            print('Loading from  mapper checkpoint: {}'.format(checkpoint_path))
             ckpt = torch.load(checkpoint_path, map_location='cpu')
             self.mapper.load_state_dict(ckpt, strict=True)
 

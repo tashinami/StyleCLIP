@@ -98,3 +98,27 @@ class SingleMapper(nn.Module):
     def forward(self, x):
         out = self.mapping(x)
         return out
+
+class LevelsMapper(nn.Module):
+
+    def __init__(self, opts = None):
+        super(LevelsMapper, self).__init__()
+
+        self.opts = opts
+
+        self.course_mapping = Mapper(opts)
+        self.medium_mapping = Mapper(opts)
+        self.fine_mapping = Mapper(opts)
+
+    def forward(self, x):
+        x_coarse = x[:, :4, :]
+        x_medium = x[:, 4:8, :]
+        x_fine = x[:, 8:, :]
+
+        x_coarse = self.course_mapping(x_coarse)
+        x_medium = self.medium_mapping(x_medium)
+        x_fine = self.fine_mapping(x_fine)
+
+        out = torch.cat([x_coarse, x_medium, x_fine], dim=1)
+
+        return out
