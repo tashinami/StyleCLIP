@@ -8,6 +8,7 @@ import os
 import cv2
 import torch
 import argparse
+import numpy as np
 from tqdm import tqdm
 from typing import List
 
@@ -34,14 +35,14 @@ def arg_parse():
     '''
       各種パラメータの読み込み
     '''
-    list_type = lambda x:list(map(int, x.split(' ')))
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--itr', default=151, type=int)
     parser.add_argument('--pretrained_model', default="ffhq", type=str)
 
     parser.add_argument('--image_path', default=None, type=str)
-    parser.add_argument('--seeds', default=None, type=list_type)
+    parser.add_argument('--seed', default=None, type=int)
+    parser.add_argument('--latent_path', default=None, type=str)
     parser.add_argument('--text', default="blue eyes", type=str)
 
     parser.add_argument('--out_dir', default="./result", type=str)
@@ -79,6 +80,7 @@ def styleGAN2_model_zoo(args):
 
 if __name__ == "__main__":
     args = arg_parse()
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # CLIPの読み込み
@@ -94,10 +96,28 @@ if __name__ == "__main__":
     with dnnlib.util.open_url(network_pkl) as f:
         generator = legacy.load_network_pkl(f)['G_ema'].to(device)
 
-    # 潜在変数を宣言
-    latent_shape = (1, 1, 512)
-    latents_init = torch.zeros(latent_shape).squeeze(-1).to(device)
-    latents = torch.nn.Parameter(latents_init, requires_grad=True)
+    # 潜在変数をセット
+    # 乱数シードによる指定
+    if args.seed is not None:
+      z = np.random.RandomState(args.seed).randn(1, generator.z_dim)
+      latents_init = generator.mapping(torch.from_numpy(z).to(device), None)
+      latents = latents_init[:, :1, :].cpu().numpy().astype(np.float32)
+      latents = torch.from_numpy(latents).to(device)
+      latents = torch.nn.Parameter(latents, requires_grad=True)
+
+    # 潜在変数を直接指定
+    elif args.latent_path is not None:
+      latents_init = np.load(args.latent_path)['w']
+      latents = latents_init[:, :1, :].astype(np.float32)
+      latents = torch.from_numpy(latents).to(device)
+      latents = torch.nn.Parameter(latents, requires_grad=True)
+
+    # 全てゼロの潜在変数を指定
+    else:
+      latent_shape = (1, 1, 512)
+      latents_init = torch.zeros(latent_shape).squeeze(-1).to(device)
+      latents = torch.nn.Parameter(latents_init, requires_grad=True)
+
 
     # 潜在変数のマッパー
     mapper = StyleCLIPMapper()
