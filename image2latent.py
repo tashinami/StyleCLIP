@@ -4,6 +4,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 import warnings
 warnings.simplefilter('ignore')
 
+import os
 import cv2
 import argparse
 import numpy as np
@@ -15,11 +16,22 @@ import torch.nn.functional as F
 import StyleGAN2.dnnlib as dnnlib
 from StyleGAN2 import legacy
 
+def tensor2cvImage(image):
+    '''
+      OpenCV形式の画像に変換する
+    '''
+    image = (image.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255).to(torch.uint8)
+    image = image[0].cpu().numpy()
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    image = cv2.resize(image, dsize=None, fx=0.5, fy=0.5)
+    return image
 
 seed = 300
 np.random.seed(seed)
 torch.manual_seed(seed)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
 
 # StyleGAN2-ADAの読み込み
 network_pkl = "https://nvlabs-fi-cdn.nvidia.com/stylegan2-ada-pytorch/pretrained/ffhq.pkl"
@@ -30,10 +42,11 @@ with dnnlib.util.open_url(network_pkl) as f:
 # Load target image.
 target_image = cv2.imread("image.png")
 target_image = cv2.resize(target_image, (generator.img_resolution, generator.img_resolution))
+target_image = cv2.cvtColor(target_image, cv2.COLOR_BGR2RGB)
 target = torch.tensor(target_image.transpose([2, 0, 1]), device=device)
 
 
-num_steps = 1000
+num_steps = 151
 w_avg_samples = 10000
 initial_learning_rate = 0.1
 
@@ -75,6 +88,7 @@ for buf in noise_bufs.values():
     buf[:] = torch.randn_like(buf)
     buf.requires_grad = True
 
+# search latent from image
 with tqdm(total=num_steps, unit="itr") as pbar:
     for step in range(num_steps):
         # Learning rate schedule.
@@ -133,10 +147,34 @@ with tqdm(total=num_steps, unit="itr") as pbar:
         results =  w_out.repeat([1, generator.mapping.num_ws, 1])
 
 
-# Save final projected frame and W vector.
+# 出力ディレクトリを作成
+out_dir = "latent"
+os.makedirs(out_dir, exist_ok=True)
+
+# 出力動画の設定
+fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+writer = cv2.VideoWriter(os.path.join(out_dir, "out.mp4"), fourcc, 30, (512, 512))
+
+# 動画作成
+print("Video output...")
+for projected_w in tqdm(results):
+    image = generator.synthesis(projected_w.unsqueeze(0), noise_mode='const')
+    image = tensor2cvImage(image)
+    writer.write(image)
+
+# 潜在変数を保存
+print("Latent output...")
 projected_w = results[-1]
-synth_image = generator.synthesis(projected_w.unsqueeze(0), noise_mode='const')
-synth_image = (synth_image + 1) * (255/2)
-synth_image = synth_image.permute(0, 2, 3, 1).clamp(0, 255).to(torch.uint8)[0].cpu().numpy()
-print(projected_w)
-cv2.imwrite("result.png", synth_image)
+os.path.join(out_dir, "projected_w.npz")
+np.savez(os.path.join(out_dir, "projected_w.npz"), w=projected_w.unsqueeze(0).cpu().numpy())
+
+print("Finish !!")
+
+
+
+
+
+
+
+
+
